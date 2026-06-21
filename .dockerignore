@@ -1,0 +1,16 @@
+__pycache__/
+.venv/
+venv/
+ENV/
+.python-version
+.env
+.env.*
+.git
+.gitignore
+.ipynb_checkpoints/
+models/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.notebooks/
