@@ -87,15 +87,19 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
+results_df = st.session_state.get("results_df")
+
 analyze_button = st.button("Analyze Resumes", type="primary")
 
 if analyze_button:
 
     if not jd_text.strip():
         st.error("Please enter a job description.")
+        st.session_state["results_df"] = None
 
     elif not uploaded_files:
         st.error("Please upload at least one PDF resume.")
+        st.session_state["results_df"] = None
 
     else:
         jd_text = clean_text(jd_text)
@@ -118,8 +122,6 @@ if analyze_button:
                     "Final Match Score (%)": result["final_score"],
                     "Fit Category": result["fit_category"],
                     "Recommendation": result["recommendation"],
-                    "Classifier Prediction": result["classifier_label"] or "N/A",
-                    "Classifier Confidence (%)": result["classifier_probability"] or "N/A",
                     "Matched Skills": ", ".join(result["matched_skills"]),
                     "Missing Skills": ", ".join(result["missing_skills"]),
                     "JD Skills": ", ".join(result["jd_skills"]),
@@ -128,149 +130,150 @@ if analyze_button:
 
         if not results:
             st.error("No readable resume content found. Please upload valid text-based PDF resume files.")
+            st.session_state["results_df"] = None
 
         else:
             results_df = pd.DataFrame(results)
-
             results_df = results_df.sort_values(
                 by="Final Match Score (%)",
                 ascending=False
             ).reset_index(drop=True)
-
             results_df["Rank"] = range(1, len(results_df) + 1)
 
-            display_df = results_df[
-                [
-                    "Rank",
-                    "Candidate",
-                    "Skill Score (%)",
-                    "Semantic Score (%)",
-                    "Final Match Score (%)",
-                    "Fit Category",
-                    "Recommendation",
-                    "Classifier Prediction",
-                    "Classifier Confidence (%)",
-                ]
-            ]
+            st.session_state["results_df"] = results_df
 
-            st.header("3. Candidate Ranking Results")
-            st.dataframe(display_df, use_container_width=True)
+results_df = st.session_state.get("results_df")
 
-            st.subheader("Top 3 Candidates")
-            st.dataframe(display_df.head(3), use_container_width=True)
+if results_df is not None:
+    display_df = results_df[
+        [
+            "Rank",
+            "Candidate",
+            "Skill Score (%)",
+            "Semantic Score (%)",
+            "Final Match Score (%)",
+            "Fit Category",
+            "Recommendation",
+        ]
+    ]
 
-            fig = px.bar(
-                display_df,
-                x="Candidate",
-                y="Final Match Score (%)",
-                color="Fit Category",
-                title="Candidate Ranking by Final Match Score",
-                text="Final Match Score (%)"
-            )
+    st.header("3. Candidate Ranking Results")
+    st.dataframe(display_df, width="stretch")
 
-            fig.update_traces(textposition="outside")
-            fig.update_layout(
-                xaxis_title="Candidate",
-                yaxis_title="Final Match Score (%)"
-            )
+    st.subheader("Top 3 Candidates")
+    st.dataframe(display_df.head(3), width="stretch")
 
-            st.plotly_chart(fig, use_container_width=True)
+    fig = px.bar(
+        display_df,
+        x="Candidate",
+        y="Final Match Score (%)",
+        color="Fit Category",
+        title="Candidate Ranking by Final Match Score",
+        text="Final Match Score (%)"
+    )
 
-            top_candidate = results_df.iloc[0]
+    fig.update_traces(textposition="outside")
+    fig.update_layout(
+        xaxis_title="Candidate",
+        yaxis_title="Final Match Score (%)"
+    )
 
-            st.header("4. Top Candidate Summary")
+    st.plotly_chart(fig, width="stretch")
+    top_candidate = results_df.iloc[0]
 
-            col1, col2, col3, col4 = st.columns(4)
+    st.header("4. Top Candidate Summary")
 
-            with col1:
-                st.metric("Top Candidate", top_candidate["Candidate"])
+    col1, col2, col3, col4 = st.columns(4)
 
-            with col2:
-                st.metric("Skill Score", f'{top_candidate["Skill Score (%)"]}%')
+    with col1:
+        st.metric("Top Candidate", top_candidate["Candidate"])
 
-            with col3:
-                st.metric("Semantic Score", f'{top_candidate["Semantic Score (%)"]}%')
+    with col2:
+        st.metric("Skill Score", f'{top_candidate["Skill Score (%)"]}%')
 
-            with col4:
-                st.metric("Final Score", f'{top_candidate["Final Match Score (%)"]}%')
+    with col3:
+        st.metric("Semantic Score", f'{top_candidate["Semantic Score (%)"]}%')
 
-            st.subheader("Fit Category")
-            st.info(top_candidate["Fit Category"])
+    with col4:
+        st.metric("Final Score", f'{top_candidate["Final Match Score (%)"]}%')
 
-            st.subheader("Recommendation")
-            st.success(top_candidate["Recommendation"])
+    st.subheader("Fit Category")
+    st.info(top_candidate["Fit Category"])
 
-            render_skill_list(
-                "Matched Skills",
-                top_candidate["Matched Skills"].split(", ") if top_candidate["Matched Skills"] else [],
-                "success"
-            )
+    st.subheader("Recommendation")
+    st.success(top_candidate["Recommendation"])
 
-            render_skill_list(
-                "Missing Skills",
-                top_candidate["Missing Skills"].split(", ") if top_candidate["Missing Skills"] else [],
-                "warning"
-            )
+    render_skill_list(
+        "Matched Skills",
+        top_candidate["Matched Skills"].split(", ") if top_candidate["Matched Skills"] else [],
+        "success"
+    )
 
-            st.header("5. Detailed Candidate Skill Gap Analysis")
+    render_skill_list(
+        "Missing Skills",
+        top_candidate["Missing Skills"].split(", ") if top_candidate["Missing Skills"] else [],
+        "warning"
+    )
 
-            selected_candidate = st.selectbox(
-                "Select candidate to inspect",
-                results_df["Candidate"].tolist()
-            )
+    st.header("5. Detailed Candidate Skill Gap Analysis")
 
-            candidate_row = results_df[
-                results_df["Candidate"] == selected_candidate
-            ].iloc[0]
+    selected_candidate = st.selectbox(
+        "Select candidate to inspect",
+        results_df["Candidate"].tolist()
+    )
 
-            col_a, col_b, col_c = st.columns(3)
+    candidate_row = results_df[
+        results_df["Candidate"] == selected_candidate
+    ].iloc[0]
 
-            with col_a:
-                st.metric("Skill Score", f'{candidate_row["Skill Score (%)"]}%')
+    col_a, col_b, col_c = st.columns(3)
 
-            with col_b:
-                st.metric("Semantic Score", f'{candidate_row["Semantic Score (%)"]}%')
+    with col_a:
+        st.metric("Skill Score", f'{candidate_row["Skill Score (%)"]}%')
 
-            with col_c:
-                st.metric("Final Score", f'{candidate_row["Final Match Score (%)"]}%')
+    with col_b:
+        st.metric("Semantic Score", f'{candidate_row["Semantic Score (%)"]}%')
 
-            st.subheader("Fit Category")
-            st.info(candidate_row["Fit Category"])
+    with col_c:
+        st.metric("Final Score", f'{candidate_row["Final Match Score (%)"]}%')
 
-            st.subheader("Recommendation")
-            st.success(candidate_row["Recommendation"])
+    st.subheader("Fit Category")
+    st.info(candidate_row["Fit Category"])
 
-            render_skill_list(
-                "Job Description Skills",
-                candidate_row["JD Skills"].split(", ") if candidate_row["JD Skills"] else [],
-                "info"
-            )
+    st.subheader("Recommendation")
+    st.success(candidate_row["Recommendation"])
 
-            render_skill_list(
-                "Candidate Resume Skills",
-                candidate_row["Resume Skills"].split(", ") if candidate_row["Resume Skills"] else [],
-                "info"
-            )
+    render_skill_list(
+        "Job Description Skills",
+        candidate_row["JD Skills"].split(", ") if candidate_row["JD Skills"] else [],
+        "info"
+    )
 
-            render_skill_list(
-                "Matched Skills",
-                candidate_row["Matched Skills"].split(", ") if candidate_row["Matched Skills"] else [],
-                "success"
-            )
+    render_skill_list(
+        "Candidate Resume Skills",
+        candidate_row["Resume Skills"].split(", ") if candidate_row["Resume Skills"] else [],
+        "info"
+    )
 
-            render_skill_list(
-                "Missing Skills",
-                candidate_row["Missing Skills"].split(", ") if candidate_row["Missing Skills"] else [],
-                "warning"
-            )
+    render_skill_list(
+        "Matched Skills",
+        candidate_row["Matched Skills"].split(", ") if candidate_row["Matched Skills"] else [],
+        "success"
+    )
 
-            st.header("6. Download Results")
+    render_skill_list(
+        "Missing Skills",
+        candidate_row["Missing Skills"].split(", ") if candidate_row["Missing Skills"] else [],
+        "warning"
+    )
 
-            csv = results_df.to_csv(index=False).encode("utf-8")
+    st.header("6. Download Results")
 
-            st.download_button(
-                label="Download Complete Ranking Results as CSV",
-                data=csv,
-                file_name="resume_jd_matching_results.csv",
-                mime="text/csv"
-            )
+    csv = results_df.to_csv(index=False).encode("utf-8")
+
+    st.download_button(
+        label="Download Complete Ranking Results as CSV",
+        data=csv,
+        file_name="resume_jd_matching_results.csv",
+        mime="text/csv"
+    )

@@ -44,12 +44,32 @@ class ResumeJDMatcher:
         similarity = cosine_similarity([jd_embedding], [resume_embedding])[0][0]
         return round(float(similarity) * 100, 2)
 
+    def build_skill_features(self, jd_text: str, resume_text: str):
+        gap = calculate_skill_gap(jd_text, resume_text, self.skills)
+        jd_tokens = len(str(jd_text).split())
+        resume_tokens = len(str(resume_text).split())
+        return np.array([
+            gap["skill_score"],
+            len(gap["matched_skills"]),
+            len(gap["missing_skills"]),
+            len(gap["jd_skills"]),
+            len(gap["resume_skills"]),
+            jd_tokens,
+            resume_tokens,
+            resume_tokens - jd_tokens,
+        ], dtype=np.float32)
+
     def build_features(self, jd_text: str, resume_text: str):
         jd_embedding, resume_embedding = self._embed_texts(jd_text, resume_text)
+        similarity = float(cosine_similarity([jd_embedding], [resume_embedding])[0][0])
+        similarity_feature = np.array([similarity], dtype=np.float32)
+        skill_features = self.build_skill_features(jd_text, resume_text)
         return np.hstack([
             jd_embedding,
             resume_embedding,
             np.abs(jd_embedding - resume_embedding),
+            similarity_feature,
+            skill_features,
         ])
 
     @staticmethod
